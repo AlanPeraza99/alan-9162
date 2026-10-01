@@ -1,0 +1,37 @@
+import * as yup from "yup";
+
+const envSchema = yup.object({
+  PORT: yup.number().integer().min(1).max(65535).default(3000),
+
+  FRONTEND_ORIGIN: yup
+    .string()
+    .default("http://localhost:5173")
+    .test(
+      "http-origin",
+      "FRONTEND_ORIGIN debe ser un origen HTTP o HTTPS, sin rutas",
+      (value) => {
+        if (!value) return false;
+
+        try {
+          const url = new URL(value);
+
+          return (
+            ["http:", "https:"].includes(url.protocol) && value === url.origin
+          );
+        } catch {
+          return false;
+        }
+      },
+    ),
+});
+
+export const env = envSchema.validateSync(
+  {
+    PORT: process.env.PORT,
+    FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN,
+  },
+  {
+    abortEarly: false,
+    stripUnknown: true,
+  },
+);
