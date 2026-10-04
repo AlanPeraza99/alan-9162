@@ -1,7 +1,9 @@
-import express, { type ErrorRequestHandler } from "express";
+import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { env } from "./config/env.js";
+import { notFoundHandler } from "./middlewares/not-found.middleware.js";
+import { errorHandler } from "./middlewares/error.middleware.js";
 
 export const app = express();
 
@@ -13,35 +15,5 @@ app.get("/api/", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
-app.use((_req, res) => {
-  res.status(404).json({
-    error: {
-      code: "NOT_FOUND",
-      message: "Ruta no encontrada",
-    },
-  });
-});
-
-const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
-  const status =
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    typeof error.status === "number" &&
-    error.status >= 400 &&
-    error.status < 500
-      ? error.status
-      : 500;
-
-  res.status(status).json({
-    error: {
-      code: status === 500 ? "INTERNAL_ERROR" : "INVALID_REQUEST",
-      message:
-        status === 500
-          ? "Ocurrió un error interno"
-          : "La solicitud no es válida",
-    },
-  });
-};
-
+app.use(notFoundHandler);
 app.use(errorHandler);
