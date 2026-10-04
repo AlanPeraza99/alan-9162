@@ -1,4 +1,4 @@
-import type { ConnectionStatus } from "~/interfaces/api";
+import type { ConnectionStatus } from "~/interfaces/api/api";
 
 export const messages: Record<ConnectionStatus, string> = {
   loading: "COMPROBANDO API…",
