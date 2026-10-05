@@ -1,4 +1,6 @@
-Aplicación con registro e inicio de sesión local, dashboard de estadísticas simuladas y recargas de saldo mediante una api de pagos local, una pasarela de pagos ficticia.
+# Carrera de Caracoles
+
+Aplicación con registro e inicio de sesión local, dashboard de estadísticas simuladas y recargas de saldo mediante SnailPay, una pasarela de pagos ficticia.
 
 ## Tecnologías
 
@@ -82,16 +84,16 @@ Ejecuta esos dos comandos en terminales distintas. Para detener los procesos, ut
 1. Abre `/registro` y crea una cuenta con nombre, correo, contraseña y confirmación.
 2. Accede al dashboard. El saldo inicial es cero.
 3. Cierra sesión y vuelve a ingresar con el mismo correo y contraseña.
-4. Pulsa **Cargar saldo** para abrir el formulario de App de pagos.
+4. Pulsa **Cargar saldo** para abrir el formulario de SnailPay.
 5. Prueba los escenarios de la siguiente sección.
 6. Recarga la página y comprueba que el saldo permanece guardado.
 7. Cierra sesión y vuelve a entrar: la cuenta y el saldo deben conservarse.
 
 El dashboard muestra cantidades simuladas de apuestas ganadas y perdidas y las victorias de seis caracoles en seis carreras. No implementa apuestas ni ejecución de carreras.
 
-## Escenarios de App de pagos
+## Escenarios de SnailPay
 
-App de pagos acepta únicamente las tarjetas ficticias listadas aquí. No introduzcas datos financieros reales.
+SnailPay acepta únicamente las tarjetas ficticias listadas aquí. No introduzcas datos financieros reales.
 
 Para todos los escenarios utiliza:
 
@@ -124,10 +126,10 @@ Axios tiene un timeout de 10 segundos. El aviso de timeout se muestra si el serv
 
 ### Probar el endpoint directamente
 
-El endpoint es `POST /api/App de pagos/payments`. Ejemplo de pago aprobado:
+El endpoint es `POST /api/snailpay/payments`. Ejemplo de pago aprobado:
 
 ```bash
-curl -i http://localhost:3000/api/App de pagos/payments \
+curl -i http://localhost:3000/api/snailpay/payments \
   -H 'Content-Type: application/json' \
   -d '{
     "cardNumber": "1234123412341234",
@@ -146,11 +148,11 @@ Para reproducir los otros escenarios cambia `cardNumber` según la tabla. Una ll
 
 LocalStorage conserva:
 
-| Clave                   | Contenido                                                                |
-| ----------------------- | ------------------------------------------------------------------------ |
-| `caracoles.user`        | Usuario, saldo, hash y salt de la contraseña                             |
-| `caracoles.session`     | Identificador del usuario con sesión activa                              |
-| `caracoles.lastPayment` | Última respuesta de App de pagos, incluida la tarjeta y el CVV ficticios |
+| Clave                   | Contenido                                                            |
+| ----------------------- | -------------------------------------------------------------------- |
+| `caracoles.user`        | Usuario, saldo, hash y salt de la contraseña                         |
+| `caracoles.session`     | Identificador del usuario con sesión activa                          |
+| `caracoles.lastPayment` | Última respuesta de SnailPay, incluida la tarjeta y el CVV ficticios |
 
 La contraseña original no se guarda; se utiliza un hash con scrypt y un salt aleatorio.
 
@@ -177,7 +179,7 @@ npm run test:web
 
 Los scripts de la raíz delegan en `test:run` de cada proyecto, que ejecuta `vitest run`. Las pruebas terminan después de ejecutarse; no quedan en modo observación.
 
-Se cubren los endpoints de registro, login y App de pagos; las validaciones de los formularios; el manejo de errores; la navegación según la sesión; logout; persistencia; clics repetidos durante el envío; actualización del saldo y coherencia de las estadísticas.
+Se cubren los endpoints de registro, login y SnailPay; las validaciones de los formularios; el manejo de errores; la navegación según la sesión; logout; persistencia; clics repetidos durante el envío; actualización del saldo y coherencia de las estadísticas.
 
 Las pruebas del frontend simulan las respuestas HTTP. El flujo con backend real se comprueba siguiendo los pasos de este README. El foco, Escape y el bloqueo del fondo del modal nativo se revisan en un navegador, porque JSDOM no reproduce completamente esas funciones.
 
@@ -216,7 +218,8 @@ Para probar login desde Swagger o Postman, registra primero un usuario y utiliza
 
 ## Limitaciones
 
-- App de pagos es un mock sin cobros reales.
+- SnailPay es un mock sin cobros reales.
 - El saldo y la sesión son locales y no tienen autoridad financiera ni autenticación de producción.
 - Las operaciones no se almacenan en una base de datos; solo se conserva la última respuesta local.
 - Los datos de carreras y apuestas son fijos y simulados.
+- No se implementan recuperación de contraseña, verificación de correo ni administración de múltiples usuarios.
