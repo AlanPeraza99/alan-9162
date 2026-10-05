@@ -3,19 +3,18 @@ import { toast } from "sonner";
 import type { ApiErrorResponse } from "~/interfaces/api/api-error.interface";
 
 export function handleApiError(error: unknown): void {
-  if (axios.isCancel(error)) {
-    return;
-  }
+  if (axios.isCancel(error)) return;
 
   if (!axios.isAxiosError<ApiErrorResponse>(error)) {
     toast.error("Ocurrió un error inesperado.");
     return;
   }
 
-  const serverMessage = error.response?.data?.error?.message;
+  const data = error.response?.data;
+  const message = data?.error?.message ?? data?.message;
 
-  if (typeof serverMessage === "string" && serverMessage.trim().length > 0) {
-    toast.error(serverMessage);
+  if (typeof message === "string" && message.trim()) {
+    toast.error(message);
     return;
   }
 

@@ -115,9 +115,11 @@ async function fillForm(
 
 function expectDashboard() {
   expect(
-    screen.getByRole("heading", {
-      name: /sesión iniciada correctamente/i,
-    }),
+    screen.getByRole("button", { name: /cerrar sesión/i }),
+  ).toBeInTheDocument();
+
+  expect(
+    screen.getByRole("status", { name: "Saldo disponible" }),
   ).toBeInTheDocument();
 }
 

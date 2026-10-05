@@ -1,5 +1,4 @@
 import { useContext } from "react";
-import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { AuthContext } from "~/context/AuthContext";
 import { AUTH_STORAGE_KEYS } from "~/constants/auth/auth-storage.constants";
@@ -7,7 +6,6 @@ import type { User } from "~/interfaces/user.interface";
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  const navigate = useNavigate();
 
   if (!context) {
     throw new Error("useAuth debe usarse dentro de AuthProvider.");
@@ -27,6 +25,17 @@ export const useAuth = () => {
     }
   };
 
+  const updateUser = (user: User): boolean => {
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEYS.user, JSON.stringify(user));
+      setUser(user);
+      return true;
+    } catch {
+      toast.error("No se pudieron guardar los datos del usuario.");
+      return false;
+    }
+  };
+
   const logout = (): void => {
     try {
       localStorage.removeItem(AUTH_STORAGE_KEYS.session);
@@ -36,5 +45,5 @@ export const useAuth = () => {
     }
   };
 
-  return { user, startSession, logout };
+  return { user, startSession, updateUser, logout };
 };
