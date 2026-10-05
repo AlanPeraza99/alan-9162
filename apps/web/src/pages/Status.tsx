@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { motion, useReducedMotion } from "motion/react";
 import { useApi } from "~/hooks/useApi";
 import roman from "~/assets/img/roman.png";
@@ -8,7 +9,7 @@ import {
   statusStyles,
 } from "~/utils/api-health-responses";
 
-export function Home() {
+export function Status() {
   const { status } = useApi();
   const reduceMotion = useReducedMotion();
 
@@ -165,6 +166,15 @@ export function Home() {
               </p>
             )}
           </div>
+        </div>
+
+        <div className="mt-6 flex justify-center">
+          <Link
+            to="/"
+            className="rounded-xl bg-orange-600 px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+          >
+            Regresar al login
+          </Link>
         </div>
       </section>
     </main>

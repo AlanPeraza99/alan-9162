@@ -1,4 +1,5 @@
 import { useContext } from "react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { AuthContext } from "~/context/AuthContext";
 import { AUTH_STORAGE_KEYS } from "~/constants/auth/auth-storage.constants";
@@ -6,6 +7,7 @@ import type { User } from "~/interfaces/user.interface";
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
+  const navigate = useNavigate();
 
   if (!context) {
     throw new Error("useAuth debe usarse dentro de AuthProvider.");
@@ -29,6 +31,7 @@ export const useAuth = () => {
     try {
       localStorage.removeItem(AUTH_STORAGE_KEYS.session);
       setUser(null);
+      navigate("/", { replace: true });
     } catch {
       toast.error("No se pudo cerrar la sesión en el navegador.");
     }

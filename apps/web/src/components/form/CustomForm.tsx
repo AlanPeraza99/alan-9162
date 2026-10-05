@@ -18,7 +18,7 @@ interface CustomFormProps<T> {
   errors?: Partial<Record<keyof T, string>>;
   disabled?: boolean;
   button: ReactNode;
-  onSubmit: (values: T) => void | Promise<void>;
+  onSubmit: (values: T) => unknown | Promise<unknown>;
 }
 
 export function CustomForm<T extends Record<keyof T, string>>({
