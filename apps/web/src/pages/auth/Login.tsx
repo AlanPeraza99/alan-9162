@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link, useNavigate } from "react-router";
 import roman from "~/assets/img/roman.png";
 import { CustomForm } from "~/components/form/CustomForm";
+import { Spinner } from "~/components/spinners/Spinner";
 import { useUser } from "~/hooks/useUser";
 import { useApi } from "~/hooks/useApi";
 import { loginSchema } from "~/schemas/auth/login.schema";
@@ -10,22 +11,26 @@ import {
   LOGIN_FIELDS,
 } from "~/constants/auth/login.constants";
 import type { LoginFormValues } from "~/interfaces/auth/login.interface";
-import { Spinner } from "~/components/spinners/Spinner";
 
 export const Login = () => {
   const { login, isLoading } = useUser();
   const { status } = useApi();
   const navigate = useNavigate();
 
-  if (status !== "connected") {
-    <Spinner message="Comprobando conexión con la API..." />;
-  }
-
   useEffect(() => {
     if (status === "error") {
       navigate("/estatus", { replace: true });
     }
   }, [status, navigate]);
+
+  if (status !== "connected") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-white px-6">
+        <Spinner message="Comprobando conexión con la API..." />
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen overflow-hidden bg-white text-stone-900">
       <section className="mx-auto flex min-h-screen max-w-5xl items-center px-6 py-10">

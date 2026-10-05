@@ -31,7 +31,6 @@ export const useAuth = () => {
     try {
       localStorage.removeItem(AUTH_STORAGE_KEYS.session);
       setUser(null);
-      navigate("/", { replace: true });
     } catch {
       toast.error("No se pudo cerrar la sesión en el navegador.");
     }
