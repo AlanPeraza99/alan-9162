@@ -3,12 +3,18 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-"scripts": {
-  "dev": "concurrently --kill-others -n API,WEB -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
-  "dev:api": "npm --prefix apps/api run dev",
-  "dev:web": "npm --prefix apps/web run dev",
-  "install:all": "npm install && npm --prefix apps/web install && npm --prefix apps/api install"
-},
+  "scripts": {
+    "dev": "concurrently --kill-others -n API,WEB -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "npm --prefix apps/api run dev",
+    "dev:web": "npm --prefix apps/web run dev",
+    "build": "concurrently -n API,WEB -c blue,green \"npm run build:api\" \"npm run build:web\"",
+    "build:api": "npm --prefix apps/api run build",
+    "build:web": "npm --prefix apps/web run build",
+    "test": "concurrently -n API,WEB -c blue,green \"npm run test:api\" \"npm run test:web\"",
+    "test:api": "npm --prefix apps/api exec -- vitest run",
+    "test:web": "npm --prefix apps/web exec -- vitest run",
+    "install:all": "npm install && npm --prefix apps/web install && npm --prefix apps/api install"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
