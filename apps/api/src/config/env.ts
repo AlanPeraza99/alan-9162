@@ -23,12 +23,34 @@ const envSchema = yup.object({
         }
       },
     ),
+
+  API_BASE_URL: yup
+    .string()
+    .default(`http://localhost:${process.env.PORT ?? 3000}`)
+    .test(
+      "api-origin",
+      "API_BASE_URL debe ser un origen HTTP o HTTPS, sin rutas",
+      (value) => {
+        if (!value) return false;
+
+        try {
+          const url = new URL(value);
+
+          return (
+            ["http:", "https:"].includes(url.protocol) && value === url.origin
+          );
+        } catch {
+          return false;
+        }
+      },
+    ),
 });
 
 export const env = envSchema.validateSync(
   {
     PORT: process.env.PORT,
     FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN,
+    API_BASE_URL: process.env.API_BASE_URL,
   },
   {
     abortEarly: false,
