@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../services/api";
 import { healthSchema } from "~/schemas/api.schema";
-import type { ConnectionStatus } from "~/interfaces/api";
+import type { ConnectionStatus } from "~/interfaces/api/api";
 
 export const useApi = () => {
   const [status, setStatus] = useState<ConnectionStatus>("loading");
