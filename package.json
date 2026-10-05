@@ -13,7 +13,8 @@
     "test": "concurrently -n API,WEB -c blue,green \"npm run test:api\" \"npm run test:web\"",
     "test:api": "npm --prefix apps/api run test:run",
     "test:web": "npm --prefix apps/web run test:run",
-    "install:all": "npm install && npm --prefix apps/web install && npm --prefix apps/api install"
+    "install:all": "npm install && npm --prefix apps/web install && npm --prefix apps/api install && npm run generate:key",
+    "generate:key": "npm --prefix apps/api run generate:key"
   },
   "keywords": [],
   "author": "",

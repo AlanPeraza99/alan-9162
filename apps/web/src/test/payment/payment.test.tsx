@@ -51,7 +51,6 @@ vi.mock("sonner", () => ({
   toast: notifications,
 }));
 
-// Las gráficas se prueban por separado.
 vi.mock("~/components/dashboard/BetsChart", () => ({
   BetsChart: () => null,
 }));
@@ -77,6 +76,11 @@ const validValues: PaymentFormValues = {
   amount: "100",
 };
 
+// Cifrados simulados: el cifrado real se prueba en el backend.
+const encryptedCard = `v1:${"11".repeat(12)}:${"22".repeat(16)}:${"33".repeat(16)}`;
+
+const encryptedCvv = `v1:${"44".repeat(12)}:${"55".repeat(16)}:${"66".repeat(3)}`;
+
 const approvedPayment: PaymentResponse = {
   id: "payment-123",
   status: "approved",
@@ -87,8 +91,9 @@ const approvedPayment: PaymentResponse = {
   reference: "SNAIL-payment-123",
   payer_id: storedUser.id,
   payer_email: storedUser.email,
-  card_number: validValues.cardNumber,
-  cvv: validValues.cvv,
+  card_number: encryptedCard,
+  cvv: encryptedCvv,
+  card_last_four: "1234",
   message: "Recarga aprobada correctamente",
 };
 
@@ -129,34 +134,32 @@ function renderDashboard() {
   return userEvent.setup();
 }
 
-async function setup() {
-  const user = renderDashboard();
-
+async function openModal(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Cargar saldo" }));
 
-  await screen.findByRole("dialog", { name: "Cargar saldo" });
-
-  return user;
-}
-
-function getModal() {
-  return screen.getByRole("dialog", { name: "Cargar saldo" });
-}
-
-function getSubmitButton() {
-  return within(getModal()).getByRole("button", {
-    name: /cargar saldo|procesando/i,
-  });
+  return screen.findByRole("dialog", { name: "Cargar saldo" });
 }
 
 function getField(name: keyof PaymentFormValues) {
   const field = PAYMENT_FIELDS.find((field) => field.name === name);
 
-  if (!field) {
-    throw new Error(`No existe el campo ${name}`);
-  }
+  if (!field) throw new Error(`No existe el campo ${name}`);
 
-  return within(getModal()).getByLabelText(field.label);
+  const modal = screen.getByRole("dialog", {
+    name: "Cargar saldo",
+  });
+
+  return within(modal).getByLabelText(field.label);
+}
+
+function getSubmitButton() {
+  const modal = screen.getByRole("dialog", {
+    name: "Cargar saldo",
+  });
+
+  return within(modal).getByRole("button", {
+    name: /cargar saldo|procesando/i,
+  });
 }
 
 async function fillForm(
@@ -184,6 +187,12 @@ function expectVisibleBalance(amount: number) {
       currency: "MXN",
     }),
   );
+}
+
+function expectModalClosed() {
+  expect(
+    screen.queryByRole("dialog", { name: "Cargar saldo" }),
+  ).not.toBeInTheDocument();
 }
 
 describe("Modal de recarga", () => {
@@ -241,36 +250,24 @@ describe("Modal de recarga", () => {
   it("abre y cierra el modal sin procesar una recarga", async () => {
     const user = renderDashboard();
 
-    expect(
-      screen.queryByRole("dialog", { name: "Cargar saldo" }),
-    ).not.toBeInTheDocument();
+    expectModalClosed();
 
-    await user.click(screen.getByRole("button", { name: "Cargar saldo" }));
-
-    const modal = await screen.findByRole("dialog", {
-      name: "Cargar saldo",
-    });
-
-    expect(
-      within(modal).getByLabelText("Monto de la recarga"),
-    ).toBeInTheDocument();
+    const modal = await openModal(user);
 
     await user.click(
       within(modal).getByRole("button", { name: "Cerrar modal" }),
     );
 
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("dialog", { name: "Cargar saldo" }),
-      ).not.toBeInTheDocument();
-    });
+    await waitFor(expectModalClosed);
 
     expect(http).not.toHaveBeenCalled();
     expect(getBalance()).toBe(50);
   });
 
-  it("no envía una recarga con monto cero", async () => {
-    const user = await setup();
+  it("mantiene el modal abierto cuando el formulario es inválido", async () => {
+    const user = renderDashboard();
+
+    await openModal(user);
 
     await fillForm(user, {
       ...validValues,
@@ -285,19 +282,24 @@ describe("Modal de recarga", () => {
       expect(getField("amount")).toHaveAccessibleDescription(/\S/);
     });
 
+    expect(
+      screen.getByRole("dialog", { name: "Cargar saldo" }),
+    ).toBeInTheDocument();
+
     expect(http).not.toHaveBeenCalled();
     expect(getBalance()).toBe(50);
   });
 
-  it("envía los datos correctos, actualiza el saldo y guarda la operación", async () => {
-    const user = await setup();
+  it("cierra el modal, actualiza el saldo y guarda los datos cifrados", async () => {
+    const user = renderDashboard();
 
+    await openModal(user);
     await fillForm(user);
     await user.click(getSubmitButton());
 
     await waitFor(() => {
+      expectModalClosed();
       expectVisibleBalance(150);
-      expect(getSubmitButton()).toBeEnabled();
     });
 
     expect(getBalance()).toBe(150);
@@ -315,20 +317,26 @@ describe("Modal de recarga", () => {
       payerEmail: storedUser.email,
     });
 
-    expect(localStorage.getItem(PAYMENT_STORAGE_KEY)).toBe(
-      JSON.stringify(approvedPayment),
+    const savedPayment: PaymentResponse = JSON.parse(
+      localStorage.getItem(PAYMENT_STORAGE_KEY)!,
     );
+
+    expect(savedPayment).toEqual(approvedPayment);
+    expect(savedPayment.card_number).toBe(encryptedCard);
+    expect(savedPayment.cvv).toBe(encryptedCvv);
+    expect(savedPayment.card_number).not.toBe(validValues.cardNumber);
+    expect(savedPayment.cvv).not.toBe(validValues.cvv);
 
     expect(notifications.success).toHaveBeenCalledWith(approvedPayment.message);
   });
 
-  it("conserva el saldo cuando la tarjeta es rechazada", async () => {
+  it("cierra el modal y conserva el saldo si la tarjeta es rechazada", async () => {
     const rejectedPayment: PaymentResponse = {
       ...approvedPayment,
       status: "rejected",
       status_detail: "card_declined",
       authorization_code: null,
-      card_number: "4000000000000002",
+      card_last_four: "0002",
       message: "La tarjeta de prueba fue rechazada",
     };
 
@@ -336,19 +344,21 @@ describe("Modal de recarga", () => {
       createResponse(config, rejectedPayment),
     );
 
-    const user = await setup();
+    const user = renderDashboard();
+
+    await openModal(user);
 
     await fillForm(user, {
       ...validValues,
-      cardNumber: rejectedPayment.card_number,
+      cardNumber: "4000000000000002",
     });
 
     await user.click(getSubmitButton());
 
     await waitFor(() => {
-      expect(notifications.error).toHaveBeenCalledWith(rejectedPayment.message);
+      expectModalClosed();
 
-      expect(getSubmitButton()).toBeEnabled();
+      expect(notifications.error).toHaveBeenCalledWith(rejectedPayment.message);
     });
 
     expect(getBalance()).toBe(50);
@@ -361,13 +371,13 @@ describe("Modal de recarga", () => {
     expect(notifications.success).not.toHaveBeenCalled();
   });
 
-  it("conserva el saldo y guarda la respuesta del fallo simulado", async () => {
+  it("conserva el saldo y guarda el resultado del fallo simulado", async () => {
     const failedPayment: PaymentResponse = {
       ...approvedPayment,
       status: "error",
       status_detail: "system_error",
       authorization_code: null,
-      card_number: "5000000000000000",
+      card_last_four: "0000",
       message: "SnailPay no está disponible. Intenta nuevamente",
     };
 
@@ -387,21 +397,23 @@ describe("Modal de recarga", () => {
       );
     });
 
-    const user = await setup();
+    const user = renderDashboard();
+
+    await openModal(user);
 
     await fillForm(user, {
       ...validValues,
-      cardNumber: failedPayment.card_number,
+      cardNumber: "5000000000000000",
     });
 
     await user.click(getSubmitButton());
 
     await waitFor(() => {
+      expectModalClosed();
+
       expect(localStorage.getItem(PAYMENT_STORAGE_KEY)).toBe(
         JSON.stringify(failedPayment),
       );
-
-      expect(getSubmitButton()).toBeEnabled();
     });
 
     expect(notifications.error).toHaveBeenCalledWith(failedPayment.message);
@@ -411,27 +423,43 @@ describe("Modal de recarga", () => {
     expect(notifications.success).not.toHaveBeenCalled();
   });
 
-  it("no modifica el saldo cuando falla la conexión", async () => {
+  it("permite reabrir el modal y reintentar después de un fallo de conexión", async () => {
     http.mockImplementationOnce(async (config) => {
       throw new AxiosError("Network Error", AxiosError.ERR_NETWORK, config);
     });
 
-    const user = await setup();
+    const user = renderDashboard();
 
+    await openModal(user);
     await fillForm(user);
     await user.click(getSubmitButton());
 
     await waitFor(() => {
+      expectModalClosed();
       expect(notifications.error).toHaveBeenCalledTimes(1);
-      expect(getSubmitButton()).toBeEnabled();
     });
 
     expect(getBalance()).toBe(50);
     expect(localStorage.getItem(PAYMENT_STORAGE_KEY)).toBeNull();
     expect(notifications.success).not.toHaveBeenCalled();
+
+    await openModal(user);
+
+    await waitFor(() => {
+      expect(getSubmitButton()).toBeEnabled();
+    });
+
+    await user.click(getSubmitButton());
+
+    await waitFor(() => {
+      expectModalClosed();
+      expectVisibleBalance(150);
+    });
+
+    expect(http).toHaveBeenCalledTimes(2);
   });
 
-  it("realiza una sola petición ante clics repetidos durante la carga", async () => {
+  it("cierra el modal antes de recibir la respuesta e impide envíos duplicados", async () => {
     let finishRequest!: () => void;
 
     http.mockImplementationOnce(
@@ -441,8 +469,9 @@ describe("Modal de recarga", () => {
         }),
     );
 
-    const user = await setup();
+    const user = renderDashboard();
 
+    await openModal(user);
     await fillForm(user);
 
     const button = getSubmitButton();
@@ -450,20 +479,25 @@ describe("Modal de recarga", () => {
     await user.dblClick(button);
 
     await waitFor(() => {
+      expectModalClosed();
       expect(http).toHaveBeenCalledTimes(1);
-      expect(button).toBeDisabled();
-      expect(button).toHaveTextContent("Procesando...");
     });
+
+    expect(getBalance()).toBe(50);
+
+    // Si se reabre mientras procesa, el formulario sigue bloqueado.
+    await openModal(user);
+
+    expect(getSubmitButton()).toBeDisabled();
 
     for (const field of PAYMENT_FIELDS) {
       expect(getField(field.name)).toBeDisabled();
     }
 
-    await user.click(button);
-    await user.click(button);
+    await user.click(getSubmitButton());
+    await user.click(getSubmitButton());
 
     expect(http).toHaveBeenCalledTimes(1);
-    expect(getBalance()).toBe(50);
 
     await act(async () => {
       finishRequest();
@@ -471,10 +505,11 @@ describe("Modal de recarga", () => {
 
     await waitFor(() => {
       expectVisibleBalance(150);
-      expect(button).toBeEnabled();
+      expect(getSubmitButton()).toBeEnabled();
     });
 
     expect(getBalance()).toBe(150);
     expect(http).toHaveBeenCalledTimes(1);
+    expect(notifications.success).toHaveBeenCalledTimes(1);
   });
 });

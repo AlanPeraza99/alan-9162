@@ -1,7 +1,9 @@
+import { createDecipheriv } from "node:crypto";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { app } from "../../app.js";
+import { env } from "../../config/env.js";
 import {
   APPROVED_CARD,
   TEST_CARDS,
@@ -22,6 +24,27 @@ const validPayload: PaymentRequest = {
   payerEmail: "alan@example.com",
 };
 
+const encryptedFormat = /^v1:[a-f0-9]{24}:[a-f0-9]{32}:[a-f0-9]+$/;
+
+// Se utiliza únicamente para verificar el cifrado en las pruebas.
+function decryptForTest(value: string): string {
+  const [, iv, tag, encrypted] = value.split(":");
+
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    Buffer.from(env.SNAILPAY_ENCRYPTION_KEY, "hex"),
+    Buffer.from(iv!, "hex"),
+    { authTagLength: 16 },
+  );
+
+  decipher.setAuthTag(Buffer.from(tag!, "hex"));
+
+  return Buffer.concat([
+    decipher.update(Buffer.from(encrypted!, "hex")),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
 function expectOperation(payment: PaymentResponse, payload: PaymentRequest) {
   expect(payment).toEqual({
     id: expect.any(String),
@@ -34,8 +57,9 @@ function expectOperation(payment: PaymentResponse, payload: PaymentRequest) {
     reference: expect.any(String),
     payer_id: payload.payerId,
     payer_email: payload.payerEmail,
-    card_number: payload.cardNumber,
-    cvv: payload.cvv,
+    card_number: expect.any(String),
+    cvv: expect.any(String),
+    card_last_four: payload.cardNumber.slice(-4),
     message: expect.any(String),
   });
 
@@ -46,6 +70,15 @@ function expectOperation(payment: PaymentResponse, payload: PaymentRequest) {
   expect(payment.reference).toMatch(/^SNAIL-/);
   expect(Number.isNaN(Date.parse(payment.date_created))).toBe(false);
   expect(payment.message.trim()).not.toBe("");
+
+  expect(payment.card_number).toMatch(encryptedFormat);
+  expect(payment.cvv).toMatch(encryptedFormat);
+
+  expect(payment.card_number).not.toBe(payload.cardNumber);
+  expect(payment.cvv).not.toBe(payload.cvv);
+
+  expect(decryptForTest(payment.card_number)).toBe(payload.cardNumber);
+  expect(decryptForTest(payment.cvv)).toBe(payload.cvv);
 }
 
 describe("POST /api/snailpay/payments", () => {
@@ -53,7 +86,7 @@ describe("POST /api/snailpay/payments", () => {
     vi.restoreAllMocks();
   });
 
-  it("aprueba el pago con la tarjeta de prueba y devuelve los datos requeridos", async () => {
+  it("aprueba el pago y devuelve tarjeta y CVV cifrados", async () => {
     const response = await request(app)
       .post("/api/snailpay/payments")
       .send(validPayload);
@@ -78,11 +111,11 @@ describe("POST /api/snailpay/payments", () => {
       .send(decimalPayload);
 
     expect(response.status).toBe(200);
+    expectOperation(response.body, decimalPayload);
     expect(response.body.status).toBe("approved");
-    expect(response.body.transaction_amount).toBe(25.5);
   });
 
-  it("rechaza la tarjeta configurada sin generar autorización", async () => {
+  it("rechaza la tarjeta configurada y conserva los campos cifrados", async () => {
     const rejectedPayload = {
       ...validPayload,
       cardNumber: TEST_CARDS.rejected,
@@ -122,7 +155,7 @@ describe("POST /api/snailpay/payments", () => {
     expect(response.body.authorization_code).toBeNull();
   });
 
-  it("devuelve 503 y una operación sin autorización durante el fallo simulado", async () => {
+  it("devuelve 503 con tarjeta y CVV cifrados durante el fallo simulado", async () => {
     const systemErrorPayload = {
       ...validPayload,
       cardNumber: TEST_CARDS.systemError,
@@ -218,23 +251,25 @@ describe("POST /api/snailpay/payments", () => {
     );
   });
 
-  it("genera identificadores y referencias diferentes para cada operación", async () => {
-    const firstResponse = await request(app)
+  it("genera operaciones y valores cifrados diferentes para solicitudes iguales", async () => {
+    const first = await request(app)
       .post("/api/snailpay/payments")
       .send(validPayload);
 
-    const secondResponse = await request(app)
+    const second = await request(app)
       .post("/api/snailpay/payments")
       .send(validPayload);
 
-    expect(firstResponse.status).toBe(200);
-    expect(secondResponse.status).toBe(200);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
 
-    expect(firstResponse.body.id).not.toBe(secondResponse.body.id);
+    expectOperation(first.body, validPayload);
+    expectOperation(second.body, validPayload);
 
-    expect(firstResponse.body.reference).not.toBe(
-      secondResponse.body.reference,
-    );
+    expect(first.body.id).not.toBe(second.body.id);
+    expect(first.body.reference).not.toBe(second.body.reference);
+    expect(first.body.card_number).not.toBe(second.body.card_number);
+    expect(first.body.cvv).not.toBe(second.body.cvv);
   });
 
   it("devuelve 400 cuando el JSON está mal formado", async () => {

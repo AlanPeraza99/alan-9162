@@ -29,4 +29,5 @@ export interface PaymentResponse {
   card_number: string;
   cvv: string;
   message: string;
+  card_last_four: string;
 }

@@ -8,13 +8,22 @@ import {
 } from "~/constants/payment/payment.constants";
 import type { PaymentFormValues } from "~/interfaces/payment/payment.interface";
 
-export const PaymentForm = () => {
+interface PaymentFormProps {
+  onSubmit?: () => void;
+}
+
+export const PaymentForm = ({ onSubmit }: PaymentFormProps) => {
   const { user } = useAuth();
   const { processPayment, isLoading, payment } = useSnailPay();
 
   const initialValues: PaymentFormValues = {
     ...PAYMENT_INITIAL_VALUES,
     fullName: user?.fullName ?? "",
+  };
+
+  const handleSubmit = async (values: PaymentFormValues): Promise<void> => {
+    onSubmit?.();
+    await processPayment(values);
   };
 
   return (
@@ -62,7 +71,7 @@ export const PaymentForm = () => {
           fields={PAYMENT_FIELDS}
           validationSchema={paymentSchema}
           disabled={isLoading}
-          onSubmit={processPayment}
+          onSubmit={handleSubmit}
           button={
             <button
               type="submit"

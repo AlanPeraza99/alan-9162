@@ -1,3 +1,4 @@
+import { encryptValue } from "../../utils/encryption.util.js";
 import { randomUUID } from "node:crypto";
 import {
   APPROVED_CARD,
@@ -27,8 +28,9 @@ export async function processPayment(
     reference: `SNAIL-${randomUUID()}`,
     payer_id: data.payerId,
     payer_email: data.payerEmail,
-    card_number: data.cardNumber,
-    cvv: data.cvv,
+    card_number: encryptValue(data.cardNumber),
+    cvv: encryptValue(data.cvv),
+    card_last_four: data.cardNumber.slice(-4),
     message: "La tarjeta de prueba fue rechazada",
   };
 

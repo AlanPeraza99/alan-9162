@@ -86,7 +86,7 @@ export const Dashboard = () => {
         onClose={() => setIsPaymentOpen(false)}
         title="Cargar saldo"
       >
-        <PaymentForm />
+        <PaymentForm onSubmit={() => setIsPaymentOpen(false)} />{" "}
       </Modal>
     </main>
   );

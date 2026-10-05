@@ -1,3 +1,10 @@
+const encryptedPattern = "^v1:[a-f0-9]{24}:[a-f0-9]{32}:[a-f0-9]+$";
+
+// Valores ilustrativos: no representan un cifrado real descifrable.
+const encryptedCardExample = `v1:${"11".repeat(12)}:${"22".repeat(16)}:${"33".repeat(16)}`;
+
+const encryptedCvvExample = `v1:${"44".repeat(12)}:${"55".repeat(16)}:${"66".repeat(3)}`;
+
 const paymentResponseSchema = {
   type: "object",
   required: [
@@ -12,6 +19,7 @@ const paymentResponseSchema = {
     "payer_email",
     "card_number",
     "cvv",
+    "card_last_four",
     "message",
   ],
   properties: {
@@ -55,14 +63,38 @@ const paymentResponseSchema = {
     },
     card_number: {
       type: "string",
-      description: "Número ficticio de la tarjeta de prueba.",
+      pattern: encryptedPattern,
+      description:
+        "Tarjeta ficticia cifrada con AES-256-GCM. Formato v1:iv:tag:contenido.",
     },
     cvv: {
       type: "string",
-      description: "CVV ficticio de prueba.",
+      pattern: encryptedPattern,
+      description:
+        "CVV ficticio cifrado con AES-256-GCM. Formato v1:iv:tag:contenido.",
+    },
+    card_last_four: {
+      type: "string",
+      pattern: "^\\d{4}$",
+      description: "Últimos cuatro dígitos de la tarjeta ficticia.",
     },
     message: {
       type: "string",
+    },
+  },
+};
+
+const errorResponseSchema = {
+  type: "object",
+  required: ["error"],
+  properties: {
+    error: {
+      type: "object",
+      required: ["code", "message"],
+      properties: {
+        code: { type: "string" },
+        message: { type: "string" },
+      },
     },
   },
 };
@@ -77,8 +109,9 @@ const paymentExample = {
   reference: "SNAIL-f2195116-df47-4329-97c8-5108a62bfcb4",
   payer_id: "user-123",
   payer_email: "alan@example.com",
-  card_number: "1234123412341234",
-  cvv: "543",
+  card_number: encryptedCardExample,
+  cvv: encryptedCvvExample,
+  card_last_four: "1234",
   message: "Recarga aprobada correctamente",
 };
 
@@ -102,8 +135,11 @@ export const paymentDocumentation = {
       "4000000000000002 simula una tarjeta rechazada. " +
       "5000000000000000 simula un fallo del sistema. " +
       "Todos los escenarios requieren un payload válido. " +
-      "El frontend únicamente debe aumentar el saldo cuando status sea approved. " +
-      "La tarjeta y el CVV devueltos son ficticios.",
+      "Las respuestas de operación incluyen tarjeta y CVV cifrados " +
+      "con AES-256-GCM y un IV aleatorio por cifrado. " +
+      "El frontend los almacena cifrados y no necesita descifrarlos. " +
+      "Los valores cifrados de los ejemplos son ilustrativos. " +
+      "Únicamente debe aumentarse el saldo cuando status sea approved.",
 
     requestBody: {
       required: true,
@@ -142,6 +178,7 @@ export const paymentDocumentation = {
               fullName: {
                 type: "string",
                 minLength: 1,
+                description: "Debe contener al menos un carácter no vacío.",
               },
               amount: {
                 type: "number",
@@ -211,7 +248,7 @@ export const paymentDocumentation = {
                   status: "rejected",
                   status_detail: "card_declined",
                   authorization_code: null,
-                  card_number: "4000000000000002",
+                  card_last_four: "0002",
                   message: "La tarjeta de prueba fue rechazada",
                 },
               },
@@ -222,7 +259,6 @@ export const paymentDocumentation = {
                   status: "rejected",
                   status_detail: "invalid_card_data",
                   authorization_code: null,
-                  cvv: "111",
                   message:
                     "El vencimiento o el CVV de la tarjeta de prueba no coinciden",
                 },
@@ -243,7 +279,7 @@ export const paymentDocumentation = {
               status: "error",
               status_detail: "system_error",
               authorization_code: null,
-              card_number: "5000000000000000",
+              card_last_four: "0000",
               message: "SnailPay no está disponible. Intenta nuevamente",
             },
           },
@@ -302,6 +338,7 @@ export const paymentDocumentation = {
         description: "JSON mal formado",
         content: {
           "application/json": {
+            schema: errorResponseSchema,
             example: {
               error: {
                 code: "INVALID_REQUEST",
@@ -316,6 +353,7 @@ export const paymentDocumentation = {
         description: "Fallo inesperado del backend",
         content: {
           "application/json": {
+            schema: errorResponseSchema,
             example: {
               error: {
                 code: "INTERNAL_ERROR",

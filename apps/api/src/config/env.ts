@@ -44,6 +44,13 @@ const envSchema = yup.object({
         }
       },
     ),
+  SNAILPAY_ENCRYPTION_KEY: yup
+    .string()
+    .required("SNAILPAY_ENCRYPTION_KEY es obligatoria")
+    .matches(
+      /^[a-f0-9]{64}$/i,
+      "SNAILPAY_ENCRYPTION_KEY debe contener 64 caracteres hexadecimales",
+    ),
 });
 
 export const env = envSchema.validateSync(
@@ -51,6 +58,7 @@ export const env = envSchema.validateSync(
     PORT: process.env.PORT,
     FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN,
     API_BASE_URL: process.env.API_BASE_URL,
+    SNAILPAY_ENCRYPTION_KEY: process.env.SNAILPAY_ENCRYPTION_KEY,
   },
   {
     abortEarly: false,

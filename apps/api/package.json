@@ -12,7 +12,8 @@
     "test:run": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "generate:key": "node scripts/generate-encryption-key.mjs"
   },
   "keywords": [],
   "author": "",
