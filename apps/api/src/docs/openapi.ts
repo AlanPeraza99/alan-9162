@@ -1,6 +1,6 @@
 import { env } from "../config/env.js";
 import { registerDocumentation } from "./auth/register.docs.js";
-
+import { loginDocumentation } from "./auth/login.docs.js";
 export const openApiDocument = {
   openapi: "3.0.3",
 
@@ -21,7 +21,7 @@ export const openApiDocument = {
 
   paths: {
     "/api/auth/register": registerDocumentation,
-
+    "/api/auth/login": loginDocumentation,
     "/api/": {
       get: {
         tags: ["Sistema"],
