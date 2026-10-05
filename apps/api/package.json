@@ -9,6 +9,7 @@
     "start": "node --env-file=.env dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:run": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --write ."
