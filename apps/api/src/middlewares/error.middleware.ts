@@ -43,6 +43,17 @@ export const errorHandler: ErrorRequestHandler = (
   }
 
   if (isClientError(error)) {
+    if (error.status === 401) {
+      res.status(401).json({
+        error: {
+          code: "INVALID_CREDENTIALS",
+          message: "Correo o contraseña incorrectos",
+        },
+      });
+
+      return;
+    }
+
     const tooLarge = error.status === 413;
 
     res.status(error.status).json({
