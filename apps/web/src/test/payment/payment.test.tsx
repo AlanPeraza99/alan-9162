@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import {
@@ -10,7 +17,16 @@ import {
   type AxiosResponse,
   type InternalAxiosRequestConfig,
 } from "axios";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 import { Dashboard } from "~/pages/Dashboard";
 import { AuthProvider } from "~/context/AuthContext";
@@ -33,6 +49,15 @@ const notifications = vi.hoisted(() => ({
 
 vi.mock("sonner", () => ({
   toast: notifications,
+}));
+
+// Las gráficas se prueban por separado.
+vi.mock("~/components/dashboard/BetsChart", () => ({
+  BetsChart: () => null,
+}));
+
+vi.mock("~/components/dashboard/SnailWinsChart", () => ({
+  SnailWinsChart: () => null,
 }));
 
 const storedUser: User = {
@@ -70,6 +95,15 @@ const approvedPayment: PaymentResponse = {
 const http = vi.fn<AxiosAdapter>();
 const originalAdapter = api.defaults.adapter;
 
+const dialogPrototype = HTMLDialogElement.prototype;
+
+const originalShowModal = Object.getOwnPropertyDescriptor(
+  dialogPrototype,
+  "showModal",
+);
+
+const originalClose = Object.getOwnPropertyDescriptor(dialogPrototype, "close");
+
 function createResponse(
   config: InternalAxiosRequestConfig,
   data: PaymentResponse = approvedPayment,
@@ -83,7 +117,7 @@ function createResponse(
   };
 }
 
-function setup() {
+function renderDashboard() {
   render(
     <MemoryRouter>
       <AuthProvider>
@@ -95,6 +129,26 @@ function setup() {
   return userEvent.setup();
 }
 
+async function setup() {
+  const user = renderDashboard();
+
+  await user.click(screen.getByRole("button", { name: "Cargar saldo" }));
+
+  await screen.findByRole("dialog", { name: "Cargar saldo" });
+
+  return user;
+}
+
+function getModal() {
+  return screen.getByRole("dialog", { name: "Cargar saldo" });
+}
+
+function getSubmitButton() {
+  return within(getModal()).getByRole("button", {
+    name: /cargar saldo|procesando/i,
+  });
+}
+
 function getField(name: keyof PaymentFormValues) {
   const field = PAYMENT_FIELDS.find((field) => field.name === name);
 
@@ -102,7 +156,7 @@ function getField(name: keyof PaymentFormValues) {
     throw new Error(`No existe el campo ${name}`);
   }
 
-  return screen.getByLabelText(field.label);
+  return within(getModal()).getByLabelText(field.label);
 }
 
 async function fillForm(
@@ -132,7 +186,39 @@ function expectVisibleBalance(amount: number) {
   );
 }
 
-describe("Recarga de saldo", () => {
+describe("Modal de recarga", () => {
+  beforeAll(() => {
+    Object.defineProperty(dialogPrototype, "showModal", {
+      configurable: true,
+      writable: true,
+      value: function (this: HTMLDialogElement) {
+        this.setAttribute("open", "");
+      },
+    });
+
+    Object.defineProperty(dialogPrototype, "close", {
+      configurable: true,
+      writable: true,
+      value: function (this: HTMLDialogElement) {
+        this.removeAttribute("open");
+      },
+    });
+  });
+
+  afterAll(() => {
+    if (originalShowModal) {
+      Object.defineProperty(dialogPrototype, "showModal", originalShowModal);
+    } else {
+      Reflect.deleteProperty(dialogPrototype, "showModal");
+    }
+
+    if (originalClose) {
+      Object.defineProperty(dialogPrototype, "close", originalClose);
+    } else {
+      Reflect.deleteProperty(dialogPrototype, "close");
+    }
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
     localStorage.clear();
@@ -142,7 +228,6 @@ describe("Recarga de saldo", () => {
     localStorage.setItem(AUTH_STORAGE_KEYS.session, storedUser.id);
 
     api.defaults.adapter = http;
-
     http.mockImplementation(async (config) => createResponse(config));
   });
 
@@ -153,33 +238,66 @@ describe("Recarga de saldo", () => {
     vi.restoreAllMocks();
   });
 
-  it("no envía una recarga con monto cero", async () => {
-    const user = setup();
+  it("abre y cierra el modal sin procesar una recarga", async () => {
+    const user = renderDashboard();
 
-    await fillForm(user, {
-      ...validValues,
-      amount: "0",
-    });
+    expect(
+      screen.queryByRole("dialog", { name: "Cargar saldo" }),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Cargar saldo" }));
 
+    const modal = await screen.findByRole("dialog", {
+      name: "Cargar saldo",
+    });
+
+    expect(
+      within(modal).getByLabelText("Monto de la recarga"),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(modal).getByRole("button", { name: "Cerrar modal" }),
+    );
+
     await waitFor(() => {
-      expect(getField("amount")).toHaveAttribute("aria-invalid", "true");
+      expect(
+        screen.queryByRole("dialog", { name: "Cargar saldo" }),
+      ).not.toBeInTheDocument();
     });
 
     expect(http).not.toHaveBeenCalled();
     expect(getBalance()).toBe(50);
   });
 
-  it("envía los datos del usuario, suma el monto y guarda la operación", async () => {
-    const user = setup();
+  it("no envía una recarga con monto cero", async () => {
+    const user = await setup();
+
+    await fillForm(user, {
+      ...validValues,
+      amount: "0",
+    });
+
+    await user.click(getSubmitButton());
+
+    await waitFor(() => {
+      expect(getField("amount")).toHaveAttribute("aria-invalid", "true");
+
+      expect(getField("amount")).toHaveAccessibleDescription(/\S/);
+    });
+
+    expect(http).not.toHaveBeenCalled();
+    expect(getBalance()).toBe(50);
+  });
+
+  it("envía los datos correctos, actualiza el saldo y guarda la operación", async () => {
+    const user = await setup();
 
     await fillForm(user);
-
-    await user.click(screen.getByRole("button", { name: "Cargar saldo" }));
+    await user.click(getSubmitButton());
 
     await waitFor(() => {
       expectVisibleBalance(150);
+      expect(getSubmitButton()).toBeEnabled();
     });
 
     expect(getBalance()).toBe(150);
@@ -218,17 +336,19 @@ describe("Recarga de saldo", () => {
       createResponse(config, rejectedPayment),
     );
 
-    const user = setup();
+    const user = await setup();
 
     await fillForm(user, {
       ...validValues,
       cardNumber: rejectedPayment.card_number,
     });
 
-    await user.click(screen.getByRole("button", { name: "Cargar saldo" }));
+    await user.click(getSubmitButton());
 
     await waitFor(() => {
       expect(notifications.error).toHaveBeenCalledWith(rejectedPayment.message);
+
+      expect(getSubmitButton()).toBeEnabled();
     });
 
     expect(getBalance()).toBe(50);
@@ -241,7 +361,7 @@ describe("Recarga de saldo", () => {
     expect(notifications.success).not.toHaveBeenCalled();
   });
 
-  it("conserva el saldo y guarda el resultado del fallo simulado", async () => {
+  it("conserva el saldo y guarda la respuesta del fallo simulado", async () => {
     const failedPayment: PaymentResponse = {
       ...approvedPayment,
       status: "error",
@@ -267,23 +387,21 @@ describe("Recarga de saldo", () => {
       );
     });
 
-    const user = setup();
+    const user = await setup();
 
     await fillForm(user, {
       ...validValues,
       cardNumber: failedPayment.card_number,
     });
 
-    await user.click(screen.getByRole("button", { name: "Cargar saldo" }));
+    await user.click(getSubmitButton());
 
     await waitFor(() => {
       expect(localStorage.getItem(PAYMENT_STORAGE_KEY)).toBe(
         JSON.stringify(failedPayment),
       );
 
-      expect(
-        screen.getByRole("button", { name: "Cargar saldo" }),
-      ).toBeEnabled();
+      expect(getSubmitButton()).toBeEnabled();
     });
 
     expect(notifications.error).toHaveBeenCalledWith(failedPayment.message);
@@ -298,18 +416,14 @@ describe("Recarga de saldo", () => {
       throw new AxiosError("Network Error", AxiosError.ERR_NETWORK, config);
     });
 
-    const user = setup();
+    const user = await setup();
 
     await fillForm(user);
-
-    await user.click(screen.getByRole("button", { name: "Cargar saldo" }));
+    await user.click(getSubmitButton());
 
     await waitFor(() => {
       expect(notifications.error).toHaveBeenCalledTimes(1);
-
-      expect(
-        screen.getByRole("button", { name: "Cargar saldo" }),
-      ).toBeEnabled();
+      expect(getSubmitButton()).toBeEnabled();
     });
 
     expect(getBalance()).toBe(50);
@@ -327,20 +441,23 @@ describe("Recarga de saldo", () => {
         }),
     );
 
-    const user = setup();
+    const user = await setup();
 
     await fillForm(user);
 
-    const button = screen.getByRole("button", {
-      name: "Cargar saldo",
-    });
+    const button = getSubmitButton();
 
     await user.dblClick(button);
 
     await waitFor(() => {
       expect(http).toHaveBeenCalledTimes(1);
       expect(button).toBeDisabled();
+      expect(button).toHaveTextContent("Procesando...");
     });
+
+    for (const field of PAYMENT_FIELDS) {
+      expect(getField(field.name)).toBeDisabled();
+    }
 
     await user.click(button);
     await user.click(button);
